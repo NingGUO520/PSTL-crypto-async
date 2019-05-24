@@ -4,8 +4,8 @@ use std::error::Error;
 use std::fmt;
 use std::cmp;
 use std::sync::{Arc, RwLock};
-//use crypto::aes::{self, KeySize};
 
+#[derive(PartialEq)]
 enum Status {
     BeingProcessed,
     Completed
@@ -29,7 +29,23 @@ struct Manager {
     min_len: usize,
     receipts: Vec<Arc<RwLock<Receipt>>>,
 }
+fn poll(receipt : & mut Arc<RwLock<Receipt>>) -> Vec<u8>{
 
+    let mut text : Vec<u8> = Vec::new();
+    loop {
+         if receipt.read().unwrap().status == Status::Completed {
+            text = receipt.read().unwrap().ciphertext.to_vec();
+            break;
+        }else {
+            continue;
+        }
+
+    }
+    return text;
+
+}
+
+ 
 impl Manager {
     fn new () -> Manager {
         return Manager {
@@ -39,9 +55,15 @@ impl Manager {
         }
     }
 
+    fn flush_job(&mut self){
+        self.jobs = Vec::new();
+        self.receipts = Vec::new();
+        self.min_len = usize::max_value();
+    }
+
     fn submit_job(&mut self, job: Job) -> Arc<RwLock<Receipt>> {
 
-        let submitted = Receipt { ciphertext: vec![ (!0) as u8; 20],
+        let submitted = Receipt { ciphertext: vec![ (!0) as u8; 16],
                                   status: Status::BeingProcessed };
         let p = Arc::new(RwLock::new(submitted));
         self.receipts.push(p.clone());
@@ -76,14 +98,12 @@ impl Manager {
                    
                 }
             }
+
             if jobDone {
                 println!("all jobs are done");
-                self.min_len = usize::max_value();
+                self.flush_job();
             }
-             for i in 0..self.receipts.len(){
-            println!("job {} {:?}",i,self.receipts[i].read().unwrap().ciphertext);
-            }
-
+            
             
         }
 
@@ -94,48 +114,25 @@ impl Manager {
 
 }
 
-fn fake_encrypt(input: &[u8], mut output: &mut [u8], key: &[u8], nonce: &[u8], len: usize) {
+fn fake_encrypt(input: &[u8], output: &mut [u8], key: &[u8], nonce: &[u8], len: usize) {
 
     for i in 0..len {
       output[i] = input[i] ^ key[i];
     }
-    println!("input = {:?}",input );
-    println!("key = {:?}",key );
-    println!("output = {:?}",output );
+
 }
-
-// fn test(){
-//     let plain = vec![0 as u8; 14];
-//     let keys = plain.clone;
-//     let output = vec![0 as u8; 20];
-
-//      fake_encrypt(&job.plaintext,
-//                              &mut Arc::clone(&self.receipts[i]).write().unwrap().ciphertext,
-//                              &job.keys,
-//                              &job.iv,
-//                              self.min_len);
-// }
 fn main() {
     
-
-    // let mut args = build_Args();
-    // let mut manager = build_Manager(args);
-
-    // let mut input: Vec<u8> = Vec::new();
-    //     input.push('a' as u8 );input.push('a');input.push('a');input.push('a');input.push('a');
-    //     input.push('a');input.push('a');input.push('a');input.push('a');input.push('a');
-    //     input.push('a');input.push('a');input.push('a');input.push('a');
         let mut manager = Manager::new();
 
-        let mut input : Vec<u8> = vec!['a' as u8; 14];
-        let  output: Vec<u8> = input.clone();
+        let mut input : Vec<u8> = vec![0 ,1,2,3,4,5,6,7];
         let mut keys: Vec<u8> = vec!['b' as u8; 14];
         keys.push(8 as u8);
         keys.push(9 as u8);
 
         let len: usize = input.len() as usize;
 
-        let mut job: Job = Job {
+        let job: Job = Job {
             plaintext: input.clone(),
             iv: [0;16],
             len: len,
@@ -173,6 +170,16 @@ fn main() {
         job8.plaintext = input.clone();
         job8.keys =  keys.clone();
 
+        let mut job9 = job.clone();
+        keys.pop();
+        keys.push('b' as u8);
+        job2.keys =  keys.clone();
+        let mut job10 = job.clone();
+        keys.pop();
+        keys.push('c' as u8);
+        job3.keys =  keys.clone();
+
+
         manager.submit_job(job);
         manager.submit_job(job2);
         manager.submit_job(job3);
@@ -181,6 +188,13 @@ fn main() {
         manager.submit_job(job6);
         manager.submit_job(job7);
         manager.submit_job(job8);
+        for i in 0..manager.receipts.len(){
+              let text = poll(& mut manager.receipts[i]);
+                println!("text = {:?}",text );
+        }
+         manager.submit_job(job9);
+        manager.submit_job(job10);
+
 
         // println!("job1: {:?}", job.ciphertext);
         // println!("job2: {:?}", job2.ciphertext);
@@ -192,8 +206,11 @@ fn main() {
         // println!("job8: {:?}", job8.ciphertext);
         // let x  =  (0 as u8 ) ^ ('b' as u8);
         for i in 0..manager.receipts.len(){
+              let text = poll(& mut manager.receipts[i]);
+                println!("text = {:?}",text );
             println!("job {} {:?}",i,manager.receipts[i].read().unwrap().ciphertext);
         }
+       
         // println!("{:?}",x );
 
 
